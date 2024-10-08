@@ -1,0 +1,111 @@
+syntax = "proto3";
+package pb;
+option go_package = "infra/pb";
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/empty.proto";
+
+// Mensagem para representar uma página web
+message Page{
+  string Url = 1;
+  repeated string Links = 2;
+  string Title = 3;
+  string Description = 4;
+  PageMeta Meta = 5;
+  bool Visited = 6;
+  google.protobuf.Timestamp timestamp = 7;   // Data e hora da coleta
+  map<string, uint32> Words = 8;
+}
+
+message PageMeta{
+  map<string, string>  OG = 1;
+  repeated string      Keywords = 2;
+  string Manifest = 3;
+  string Ld = 4;
+}
+
+message PageVisited{
+  string Url = 1;
+  bool Visited = 2;
+}
+message PageSearch{
+  string Url = 1;
+  string Title = 2;
+}
+
+message PageSearchWithFrequency{
+  PageSearch PageSearch = 1;
+  uint32 Frequency = 2;
+}
+
+message CrawlRequest {
+  repeated QueueType queue = 1;
+}
+
+// Mensagem para reportar o resultado do processamento
+message ProcessedResult {
+  uint32 hash = 1;        // Hash da página processada
+  Page page = 2;
+  ProcessingState state = 3; // Estado do processamento
+  // Enum para estados de processamento do pedido
+  enum ProcessingState {
+    PENDING = 0;   // Pedido aguardando
+    IN_PROGRESS = 1; // Pedido em processamento
+    COMPLETED = 2; // Pedido concluído
+    FAILED = 3;    // Pedido falhou
+  }
+}
+message QueueType {
+  string Url = 1;
+  uint32 Depth = 2;
+  google.protobuf.Timestamp timestamp = 3;
+  PageStatus status = 4;
+  enum PageStatus {
+    UNKNOWN = 0;       // Estado desconhecido
+    PENDING = 1;       // Página a ser visitada
+    VISITED = 2;       // Página já visitada
+    ERROR = 3;         // Erro ao acessar a página
+    SKIPPED = 4;       // Página ignorada (por algum motivo)
+    PROCESSING_OUT = 5; // Processamento externo
+  }
+}
+message RequestQueue {
+  uint32 numberOfProcesses = 1;
+}
+
+// Serviço gRPC (interno) para o crawler
+service CrawlerService {
+  // Método para solicitar o processamento de um pedido ao servidor, deve enviar nada e retornar
+  rpc ProcessCrawl(RequestQueue) returns (CrawlRequest);
+
+  // Método para reportar que o processamento foi concluído enviando ProcessedResult para o servidor
+  rpc ReportProcessedResult(ProcessedResult) returns (google.protobuf.Empty);
+}
+
+
+/**
+
+API
+HandlerQueue /api/v1/manager/queue - POST - Add a new URL to the queue
+HandlerQueue /api/v1/manager/queue - GET - Get the list of URLs in the queue
+HandlerSearch /api/v1/manager/search - POST - Search for a URL in the database
+HandlerCrawl /api/v1/manager/crawl - POST - Start and Stop the crawling process
+HandlerCrawl /api/v1/manager/crawl - GET - Get the status of the crawling process
+*/
+message GetQueue {
+  repeated QueueType queue = 1;
+}
+
+// StatusResponse resposta de status para CreateQueue
+message StatusResponse {
+  string message = 1;
+}
+
+message SearchType {
+  string ByWords = 1;
+  google.protobuf.Timestamp ByTime = 2;
+}
+
+
+message CrawlAction {
+  bool Start = 1;
+}

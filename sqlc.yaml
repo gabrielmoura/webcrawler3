@@ -1,0 +1,19 @@
+version: "2"
+plugins:
+  - name: golang
+    wasm:
+      url: https://downloads.sqlc.dev/plugin/sqlc-gen-go_1.3.0.wasm
+      sha256: e8206081686f95b461daf91a307e108a761526c6768d6f3eca9781b0726b7ec8
+sql:
+  - engine: "postgresql"
+    queries: "infra/db/repoDb/query.sql"
+    schema: "infra/db/repoDb/schema.sql"
+    gen:
+      go:
+        package: "db"
+        out: "infra/db"
+        sql_package: "pgx/v5"
+        emit_db_tags: true
+        emit_json_tags: true
+        emit_interface: true
+        emit_prepared_queries: true
