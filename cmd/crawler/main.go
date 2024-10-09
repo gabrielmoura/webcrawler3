@@ -2,14 +2,13 @@ package main
 
 import (
 	"context"
+	"go.uber.org/zap"
 	"webCrawler3/config"
 	"webCrawler3/infra/crawler"
 	"webCrawler3/infra/db/repoDb"
 	"webCrawler3/infra/log"
 	"webCrawler3/infra/mgr/cluster"
 	"webCrawler3/infra/mgr/router"
-
-	"go.uber.org/zap"
 )
 
 func main() {
@@ -30,6 +29,9 @@ func main() {
 
 	// Inicia Ouvinte UDP
 	go cluster.InitCluster(ctx, config.Conf)
+
+	// Agendamento de tarefas
+	//go tasks.Handle(ctx)
 
 	// Inicia o processo de rastreamento
 	crawler.HandleQueue()

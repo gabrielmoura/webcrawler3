@@ -28,11 +28,16 @@ var (
 // processPage processa uma página, extrai links e dados
 func processPage(queueId pgtype.UUID, pageUrl string, depth int) {
 	dataPageCtx, cancel := context.WithCancel(context.Background())
-	log.Logger.Debug("Looping queue, depth: ", zap.Int("depth", depth))
 	if depth > config.Conf.MaxDepth {
 		log.Logger.Info("Reached max depth", zap.Int("depth", depth), zap.Int("maxDepth", config.Conf.MaxDepth))
+		err := repoDb.MarkAsSkipped(context.Background(), queueId)
+		if err != nil {
+			log.Logger.Error("Error marking as skipped", zap.Error(err))
+			return
+		}
 		return
 	}
+	log.Logger.Debug("Looping queue, depth: ", zap.Int("depth", depth))
 
 	// Verifica se a página já foi visitada
 	visited, err := repoDb.PageHasVisited(dataPageCtx, pageUrl)
@@ -53,6 +58,11 @@ func processPage(queueId pgtype.UUID, pageUrl string, depth int) {
 			return
 		}
 		log.Logger.Debug(fmt.Sprintf("Error checking link: %s", err))
+		err := repoDb.MarkAsError(context.Background(), queueId)
+		if err != nil {
+			log.Logger.Error("Error marking as error", zap.Error(err))
+			return
+		}
 		return
 	}
 	log.Logger.Info("visitado", zap.String("url", pageUrl))

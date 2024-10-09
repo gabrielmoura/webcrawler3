@@ -72,8 +72,9 @@ func checkTLD(link string) bool {
 
 func handleAddToQueue(links []string, depth int) {
 	for _, link := range links {
-		if checkTLD(link) && isAllowedSchema(link, config.Conf.CoreConfig.AcceptableSchema.Schemas) {
-			_, err := repoDb.AddToQueueIfNotExists(context.Background(), link, depth)
+		nLink := strings.TrimSpace(link)
+		if checkTLD(nLink) && isAllowedSchema(nLink, config.Conf.CoreConfig.AcceptableSchema.Schemas) {
+			_, err := repoDb.AddToQueueIfNotExists(context.Background(), nLink, depth)
 			if err != nil {
 				log.Logger.Error("error adding link to queue", zap.String("Link", link), zap.Error(err))
 				return
@@ -126,6 +127,7 @@ func prepareParentLink(parentLink, link string) (*url.URL, error) {
 		link = link[1:]
 	}
 
+	// Se o link for vazio, retorna erro
 	nURL, err := url.Parse(link)
 	if err != nil {
 		return nil, err
@@ -134,14 +136,22 @@ func prepareParentLink(parentLink, link string) (*url.URL, error) {
 		return nil, ErrEmptyPath
 	}
 
+	if nURL.IsAbs() {
+		log.Logger.Debug("New URL", zap.String("URL", nURL.String()), zap.Bool("absolute", true))
+		return nURL, nil
+	}
+
+	// Se o link for relativo, adiciona o host e schema do link pai
 	pURL, err := url.Parse(parentLink)
 	if err != nil {
 		return nil, err
 	}
 
+	// Se o link for relativo, adiciona o host e schema do link pai
 	nURL.Host = pURL.Host
 	nURL.Scheme = pURL.Scheme
-	log.Logger.Debug("New URL", zap.String("URL", nURL.String()))
+	nURL.Path = strings.TrimRight(pURL.Path, "/") + link
+	log.Logger.Debug("New URL", zap.String("URL", nURL.String()), zap.Bool("absolute", false))
 
 	return nURL, nil
 }

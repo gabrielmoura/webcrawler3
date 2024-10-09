@@ -47,6 +47,9 @@ func httpRequest(pageUrl string) (resp *http.Response, err error) {
 		return
 	}
 	req.Header.Set("User-Agent", config.Conf.UserAgent)
+
+	req.Header.Set("Accept", config.Conf.GetAcceptableMimeType())
+
 	resp, err = client.Do(req)
 	return
 }

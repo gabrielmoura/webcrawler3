@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"go.uber.org/zap"
 	"golang.org/x/net/html"
 	"regexp"
 	"strings"
@@ -52,11 +51,11 @@ func countWordsInText(data []byte) (config.MapWordsType, error) {
 		word := string(bytes.TrimSpace(wordBytes))
 
 		// Pule palavras curtas e palavras de parada comuns
-		if len(word) < 2 || containsStopWord(word, "") {
+		if len(word) <= 2 || containsStopWord(word, "") {
 			continue
 		}
 		wordCounts[word]++
-		log.Logger.Debug("Word: ", zap.Uint32(word, wordCounts[word]))
+		//log.Logger.Debug("Word: ", zap.Uint32(word, wordCounts[word]))
 	}
 
 	return wordCounts, nil

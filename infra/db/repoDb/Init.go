@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"go.uber.org/zap"
 	"strings"
+	"sync"
 	"webCrawler3/config"
 	"webCrawler3/infra/log"
 
@@ -23,6 +24,8 @@ import (
 var schema string
 var DbQueries *db.Queries
 var Pool *pgxpool.Pool
+
+var addQueue = sync.Mutex{}
 
 // Initialize sets up the database connection and schema
 func Initialize(ctx context.Context, cfg config.Config) (*pgxpool.Pool, error) {
@@ -55,7 +58,7 @@ func Initialize(ctx context.Context, cfg config.Config) (*pgxpool.Pool, error) {
 }
 
 // AddToQueue inserts a new URL into the processing queue
-func AddToQueue(ctx context.Context, url string, depth int) (db.Queue, error) {
+func addToQueue(ctx context.Context, url string, depth int) (db.Queue, error) {
 	queueEntry, err := DbQueries.QueueInsert(ctx, db.QueueInsertParams{
 		Url:    url,
 		Depth:  int32(depth),
@@ -65,13 +68,15 @@ func AddToQueue(ctx context.Context, url string, depth int) (db.Queue, error) {
 }
 
 func AddToQueueIfNotExists(ctx context.Context, url string, depth int) (db.Queue, error) {
+	addQueue.Lock()
+	defer addQueue.Unlock()
 	queueEntry, err := DbQueries.QueueGetAllByStatusAndUrl(ctx, db.QueueGetAllByStatusAndUrlParams{
 		Status: int32(pb.QueueType_PENDING),
 		Url:    url,
 	})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return AddToQueue(ctx, url, depth)
+			return addToQueue(ctx, url, depth)
 		}
 		return db.Queue{}, err
 	}
@@ -107,6 +112,14 @@ func MarkAsError(ctx context.Context, id pgtype.UUID) error {
 	return DbQueries.QueueMarkAs(ctx, db.QueueMarkAsParams{
 		ID:     id,
 		Status: int32(pb.QueueType_ERROR),
+	})
+}
+func MarkAsSkipped(ctx context.Context, id pgtype.UUID) error {
+	addQueue.Lock()
+	defer addQueue.Unlock()
+	return DbQueries.QueueMarkAs(ctx, db.QueueMarkAsParams{
+		ID:     id,
+		Status: int32(pb.QueueType_SKIPPED),
 	})
 }
 
@@ -181,50 +194,73 @@ func runWithTX(ctx context.Context, c *pgxpool.Pool, fn func(*db.Queries) error)
 }
 
 // PrepareHealth consolidates the health of the database
-func prepareHealth(ctx context.Context) []error {
-	var errs []error
+func PrepareHealth(ctx context.Context) []error {
+	var errorList []error
 
-	// 1. Busque todas as filas com url igual, caso encontre mais de uma, marque todas com status 4 menos a primeira
-	errs = append(errs, runWithTX(ctx, Pool, func(tx *db.Queries) error {
+	// 1. Retrieve all queues with a pending status and mark duplicates as skipped
+	errorList = append(errorList, runWithTX(ctx, Pool, func(tx *db.Queries) error {
+		// Fetch queues with the status 'PENDING'
 		queues, err := tx.QueueGetAllByStatus(ctx, db.QueueGetAllByStatusParams{
 			Status: int32(pb.QueueType_PENDING),
+			Limit:  100,
+			Offset: 0,
 		})
 		if err != nil {
-			return err
+			return err // Return error if fetching queues fails
 		}
-		visited := make(map[string]bool)
+		log.Logger.Debug("Processing queues", zap.Int("count", len(queues)))
+
+		// Track visited URLs to identify duplicates
+		visitedUrls := make(map[string]bool)
 		for _, queue := range queues {
-			if _, ok := visited[queue.Url.String]; ok {
-				_ = tx.QueueMarkAs(ctx, db.QueueMarkAsParams{
+			if _, exists := visitedUrls[queue.Url.String]; exists {
+				// Mark as skipped if the URL has already been visited
+				if err := tx.QueueMarkAs(ctx, db.QueueMarkAsParams{
 					ID:     queue.ID,
 					Status: int32(pb.QueueType_SKIPPED),
-				})
+				}); err != nil {
+					return err // Return error if marking fails
+				}
+				log.Logger.Debug("Marked as skipped", zap.String("url", queue.Url.String))
 			}
-			visited[queue.Url.String] = true
+			visitedUrls[queue.Url.String] = true // Mark URL as visited
 		}
-		return nil
+		return nil // Successfully processed all queues
 	}))
 
-	// 2. Busque todas as páginas com url igual na fila, marque como visitado
-	errs = append(errs, runWithTX(ctx, Pool, func(tx *db.Queries) error {
-		pages, err := tx.GetPages(ctx, db.GetPagesParams{})
+	// 2. Retrieve all pages and mark duplicates in the queue as visited
+	errorList = append(errorList, runWithTX(ctx, Pool, func(tx *db.Queries) error {
+		// Fetch all pages
+		pages, err := tx.GetPages(ctx, db.GetPagesParams{
+			Limit:  100,
+			Offset: 0,
+		})
 		if err != nil {
-			return err
+			return err // Return error if fetching pages fails
 		}
-		visited := make(map[string]bool)
+		log.Logger.Debug("Processing pages", zap.Int("count", len(pages)))
+
+		// Track visited URLs for pages
+		visitedPages := make(map[string]bool)
 		for _, page := range pages {
-			if _, ok := visited[page.Url.String]; ok {
-				_ = tx.QueueMarkAsByUrl(ctx, db.QueueMarkAsByUrlParams{
+			if _, exists := visitedPages[page.Url.String]; exists {
+				// Mark as visited if the URL has already been processed
+				if err := tx.QueueMarkAsByUrl(ctx, db.QueueMarkAsByUrlParams{
 					Url:    page.Url.String,
 					Status: int32(pb.QueueType_VISITED),
-				})
+				}); err != nil {
+					return err // Return error if marking fails
+				}
+				log.Logger.Debug("Marked as visited", zap.String("url", page.Url.String))
 			}
-			visited[page.Url.String] = true
+			visitedPages[page.Url.String] = true // Mark URL as visited
 		}
-		return nil
+		return nil // Successfully processed all pages
 	}))
-	return errs
+
+	return errorList // Return the list of errors encountered
 }
+
 func SearchByWeight(ctx context.Context, terms string) ([]db.Page, error) {
 	// Separe os termos em palavras por espaço
 	words := strings.Fields(terms)

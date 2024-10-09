@@ -52,6 +52,16 @@ func loadByFlag(cfg *Config) error {
 	Conf = cfg
 	return nil
 }
+
+func (c *Config) GetAcceptableMimeType() string {
+	var queryBuilder strings.Builder
+	for _, acceptMime := range c.CoreConfig.AcceptableMimeTypes.MimeTypes {
+		queryBuilder.WriteString(acceptMime)
+		queryBuilder.WriteString(",")
+	}
+	return queryBuilder.String()
+}
+
 func loadByConfigFile() error {
 	var cfg Config
 	vip := viper.New()
