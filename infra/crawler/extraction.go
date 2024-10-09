@@ -50,8 +50,8 @@ func countWordsInText(data []byte) (config.MapWordsType, error) {
 	for _, wordBytes := range words {
 		word := string(bytes.TrimSpace(wordBytes))
 
-		// Pule palavras curtas e palavras de parada comuns
-		if len(word) <= 2 || containsStopWord(word, "") {
+		// Pule palavras curtas e palavras de parada comuns (e palavras que começam com números)
+		if len(word) <= 2 || containsStopWord(word, "") || startWithNumber(word) {
 			continue
 		}
 		wordCounts[word]++
@@ -59,6 +59,12 @@ func countWordsInText(data []byte) (config.MapWordsType, error) {
 	}
 
 	return wordCounts, nil
+}
+
+// startWithNumber Verifica se uma palavra começa com um número.
+func startWithNumber(word string) bool {
+	regex := regexp.MustCompile("^[0-9]")
+	return regex.MatchString(word)
 }
 
 // ContainsMap Verifica se uma palavra está em uma lista de stop words comuns,
