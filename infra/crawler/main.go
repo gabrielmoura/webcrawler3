@@ -37,11 +37,6 @@ func processPage(queueId pgtype.UUID, pageUrl string, depth, delay int) {
 		}
 		return
 	}
-	log.Logger.Debug("Looping queue, depth: ", zap.Int("depth", depth))
-
-	if delay > 0 {
-		time.Sleep(time.Duration(delay) * time.Second)
-	}
 
 	// Verifica se a página já foi visitada
 	visited, err := repoDb.PageHasVisited(dataPageCtx, pageUrl)
@@ -51,7 +46,16 @@ func processPage(queueId pgtype.UUID, pageUrl string, depth, delay int) {
 	}
 	if visited {
 		cancel()
+		err := repoDb.MarkAsSkipped(context.Background(), queueId)
+		if err != nil {
+			log.Logger.Error("Error marking as skipped", zap.Error(err))
+		}
 		return
+	}
+
+	// Caso haja um delay, aguarda o tempo especificado
+	if delay > 0 {
+		time.Sleep(time.Duration(delay) * time.Second)
 	}
 
 	log.Logger.Info("Visiting", zap.String("url", pageUrl))
