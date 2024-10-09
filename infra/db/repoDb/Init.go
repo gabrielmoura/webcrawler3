@@ -20,12 +20,17 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-//go:embed schema.sql
-var schema string
-var DbQueries *db.Queries
-var Pool *pgxpool.Pool
+var (
 
-var addQueue = sync.Mutex{}
+	//go:embed schema.sql
+	schema    string
+	DbQueries *db.Queries
+	Pool      *pgxpool.Pool
+
+	addQueue = sync.Mutex{}
+
+	ErrMaxDepthReached = errors.New("max depth reached")
+)
 
 // Initialize sets up the database connection and schema
 func Initialize(ctx context.Context, cfg config.Config) (*pgxpool.Pool, error) {
@@ -33,8 +38,8 @@ func Initialize(ctx context.Context, cfg config.Config) (*pgxpool.Pool, error) {
 	if err != nil {
 		log.Logger.Panic("Error parsing Postgres URI", zap.Error(err))
 	}
-	poolConfig.MaxConns = int32(config.Conf.MaxConcurrency) + 2 // +2 para conexões de controle
-	poolConfig.MinConns = int32(config.Conf.MaxConcurrency / 2) // 50% do máximo
+	poolConfig.MaxConns = cfg.GetDBMaxConns()
+	poolConfig.MinConns = cfg.GetDBMinConns()
 
 	poolConfig.AfterConnect = func(ctx context.Context, conn *pgx.Conn) error {
 		// ...
@@ -58,25 +63,31 @@ func Initialize(ctx context.Context, cfg config.Config) (*pgxpool.Pool, error) {
 }
 
 // AddToQueue inserts a new URL into the processing queue
-func addToQueue(ctx context.Context, url string, depth int) (db.Queue, error) {
+func addToQueue(ctx context.Context, url string, depth, delay int) (db.Queue, error) {
 	queueEntry, err := DbQueries.QueueInsert(ctx, db.QueueInsertParams{
 		Url:    url,
 		Depth:  int32(depth),
-		Status: int32(pb.QueueType_PENDING),
+		Status: db.StatusPending,
+		Delay:  int32(delay),
 	})
 	return queueEntry, err
 }
 
-func AddToQueueIfNotExists(ctx context.Context, url string, depth int) (db.Queue, error) {
+func AddToQueueIfNotExists(ctx context.Context, url string, depth, delay int) (db.Queue, error) {
 	addQueue.Lock()
 	defer addQueue.Unlock()
+
+	if depth > config.Conf.MaxDepth {
+		return db.Queue{}, ErrMaxDepthReached
+	}
+
 	queueEntry, err := DbQueries.QueueGetAllByStatusAndUrl(ctx, db.QueueGetAllByStatusAndUrlParams{
-		Status: int32(pb.QueueType_PENDING),
+		Status: db.StatusPending,
 		Url:    url,
 	})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return addToQueue(ctx, url, depth)
+			return addToQueue(ctx, url, depth, delay)
 		}
 		return db.Queue{}, err
 	}
@@ -90,7 +101,7 @@ func RetrieveFromQueue(ctx context.Context, limit, offset int) ([]db.Queue, erro
 		limitInt32 = 10
 	}
 	params := &db.QueueGetAllByStatusParams{
-		Status: int32(pb.QueueType_PENDING),
+		Status: db.StatusPending,
 		Limit:  limitInt32,
 		Offset: int32(offset),
 	}
@@ -105,13 +116,13 @@ func RetrieveFromQueue(ctx context.Context, limit, offset int) ([]db.Queue, erro
 func MarkAsVisited(ctx context.Context, id pgtype.UUID) error {
 	return DbQueries.QueueMarkAs(ctx, db.QueueMarkAsParams{
 		ID:     id,
-		Status: int32(pb.QueueType_VISITED),
+		Status: db.StatusVisited,
 	})
 }
 func MarkAsError(ctx context.Context, id pgtype.UUID) error {
 	return DbQueries.QueueMarkAs(ctx, db.QueueMarkAsParams{
 		ID:     id,
-		Status: int32(pb.QueueType_ERROR),
+		Status: db.StatusError,
 	})
 }
 func MarkAsSkipped(ctx context.Context, id pgtype.UUID) error {
@@ -119,7 +130,7 @@ func MarkAsSkipped(ctx context.Context, id pgtype.UUID) error {
 	defer addQueue.Unlock()
 	return DbQueries.QueueMarkAs(ctx, db.QueueMarkAsParams{
 		ID:     id,
-		Status: int32(pb.QueueType_SKIPPED),
+		Status: db.StatusSkipped,
 	})
 }
 
@@ -156,7 +167,7 @@ func SavePageAndMarkVisited(ctx context.Context, page *pb.Page, queueId pgtype.U
 		}
 		return DbQueries.QueueMarkAs(ctx, db.QueueMarkAsParams{
 			ID:     queueId,
-			Status: int32(pb.QueueType_VISITED),
+			Status: db.StatusVisited,
 		})
 	})
 }
@@ -164,7 +175,7 @@ func SavePageAndMarkVisited(ctx context.Context, page *pb.Page, queueId pgtype.U
 // PageHasVisited checks if a page has been visited
 func PageHasVisited(ctx context.Context, url string) (bool, error) {
 	page, err := DbQueries.QueueGetAllByStatusAndUrl(ctx, db.QueueGetAllByStatusAndUrlParams{
-		Status: int32(pb.QueueType_VISITED),
+		Status: db.StatusVisited,
 		Url:    url,
 	})
 	if err != nil {
@@ -174,7 +185,7 @@ func PageHasVisited(ctx context.Context, url string) (bool, error) {
 		return false, err
 	}
 
-	return page.Status.Int32 == int32(pb.QueueType_VISITED), nil
+	return page.Status == db.StatusVisited, nil
 }
 
 func runWithTX(ctx context.Context, c *pgxpool.Pool, fn func(*db.Queries) error) error {
@@ -201,7 +212,7 @@ func PrepareHealth(ctx context.Context) []error {
 	errorList = append(errorList, runWithTX(ctx, Pool, func(tx *db.Queries) error {
 		// Fetch queues with the status 'PENDING'
 		queues, err := tx.QueueGetAllByStatus(ctx, db.QueueGetAllByStatusParams{
-			Status: int32(pb.QueueType_PENDING),
+			Status: db.StatusPending,
 			Limit:  100,
 			Offset: 0,
 		})
@@ -217,7 +228,7 @@ func PrepareHealth(ctx context.Context) []error {
 				// Mark as skipped if the URL has already been visited
 				if err := tx.QueueMarkAs(ctx, db.QueueMarkAsParams{
 					ID:     queue.ID,
-					Status: int32(pb.QueueType_SKIPPED),
+					Status: db.StatusSkipped,
 				}); err != nil {
 					return err // Return error if marking fails
 				}
@@ -247,7 +258,7 @@ func PrepareHealth(ctx context.Context) []error {
 				// Mark as visited if the URL has already been processed
 				if err := tx.QueueMarkAsByUrl(ctx, db.QueueMarkAsByUrlParams{
 					Url:    page.Url.String,
-					Status: int32(pb.QueueType_VISITED),
+					Status: db.StatusVisited,
 				}); err != nil {
 					return err // Return error if marking fails
 				}
@@ -321,7 +332,7 @@ func AddHelperI2P(ctx context.Context, url string) (db.Queue, error) {
 	queueEntry, err := DbQueries.QueueInsert(ctx, db.QueueInsertParams{
 		Url:    url,
 		Depth:  0,
-		Status: int32(pb.QueueType_UNKNOWN),
+		Status: db.StatusUnknown,
 	})
 	return queueEntry, err
 }

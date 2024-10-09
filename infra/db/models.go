@@ -5,8 +5,70 @@
 package db
 
 import (
+	"database/sql/driver"
+	"fmt"
+
 	"github.com/jackc/pgx/v5/pgtype"
 )
+
+type Status string
+
+const (
+	StatusUnknown       Status = "unknown"
+	StatusPending       Status = "pending"
+	StatusVisited       Status = "visited"
+	StatusError         Status = "error"
+	StatusSkipped       Status = "skipped"
+	StatusProcessingOut Status = "processing_out"
+)
+
+func (e *Status) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = Status(s)
+	case string:
+		*e = Status(s)
+	default:
+		return fmt.Errorf("unsupported scan type for Status: %T", src)
+	}
+	return nil
+}
+
+type NullStatus struct {
+	Status Status `json:"status"`
+	Valid  bool   `json:"valid"` // Valid is true if Status is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullStatus) Scan(value interface{}) error {
+	if value == nil {
+		ns.Status, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.Status.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullStatus) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.Status), nil
+}
+
+func (e Status) Valid() bool {
+	switch e {
+	case StatusUnknown,
+		StatusPending,
+		StatusVisited,
+		StatusError,
+		StatusSkipped,
+		StatusProcessingOut:
+		return true
+	}
+	return false
+}
 
 type Page struct {
 	ID          pgtype.UUID        `db:"id" json:"id"`
@@ -25,5 +87,7 @@ type Queue struct {
 	Url       pgtype.Text        `db:"url" json:"url"`
 	Depth     pgtype.Int4        `db:"depth" json:"depth"`
 	Timestamp pgtype.Timestamptz `db:"timestamp" json:"timestamp"`
-	Status    pgtype.Int4        `db:"status" json:"status"`
+	Status    Status             `db:"status" json:"status"`
+	Delay     pgtype.Int4        `db:"delay" json:"delay"`
+	Error     []byte             `db:"error" json:"error"`
 }

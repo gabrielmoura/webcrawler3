@@ -59,6 +59,7 @@ message QueueType {
   uint32 Depth = 2;
   google.protobuf.Timestamp timestamp = 3;
   PageStatus status = 4;
+  uint32 delay = 5; // Delay em segundos para a próxima requisição
   enum PageStatus {
     UNKNOWN = 0;       // Estado desconhecido
     PENDING = 1;       // Página a ser visitada

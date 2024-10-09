@@ -52,7 +52,7 @@ func HandlerQueue(w http.ResponseWriter, r *http.Request) {
 		err := decode.Decode(&queue)
 		// add a new URL to the queue
 
-		_, err = repoDb.AddToQueueIfNotExists(r.Context(), queue.Url, int(queue.Depth))
+		_, err = repoDb.AddToQueueIfNotExists(r.Context(), queue.Url, int(queue.Depth), int(queue.Delay))
 
 		if err == nil {
 			msg := pb.StatusResponse{Message: "URL added to the queue"}

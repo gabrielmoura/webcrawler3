@@ -62,6 +62,15 @@ func (c *Config) GetAcceptableMimeType() string {
 	return queryBuilder.String()
 }
 
+func (c *Config) GetDBMaxConns() int32 {
+	// +2 para conexões de controle
+	return int32(c.MaxConcurrency) + 2
+}
+func (c *Config) GetDBMinConns() int32 {
+	// 50% do máximo
+	return int32(c.MaxConcurrency / 2)
+}
+
 func loadByConfigFile() error {
 	var cfg Config
 	vip := viper.New()

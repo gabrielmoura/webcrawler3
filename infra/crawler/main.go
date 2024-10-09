@@ -26,7 +26,7 @@ var (
 )
 
 // processPage processa uma página, extrai links e dados
-func processPage(queueId pgtype.UUID, pageUrl string, depth int) {
+func processPage(queueId pgtype.UUID, pageUrl string, depth, delay int) {
 	dataPageCtx, cancel := context.WithCancel(context.Background())
 	if depth > config.Conf.MaxDepth {
 		log.Logger.Info("Reached max depth", zap.Int("depth", depth), zap.Int("maxDepth", config.Conf.MaxDepth))
@@ -38,6 +38,10 @@ func processPage(queueId pgtype.UUID, pageUrl string, depth int) {
 		return
 	}
 	log.Logger.Debug("Looping queue, depth: ", zap.Int("depth", depth))
+
+	if delay > 0 {
+		time.Sleep(time.Duration(delay) * time.Second)
+	}
 
 	// Verifica se a página já foi visitada
 	visited, err := repoDb.PageHasVisited(dataPageCtx, pageUrl)
@@ -90,7 +94,7 @@ func processPage(queueId pgtype.UUID, pageUrl string, depth int) {
 		return
 	}
 
-	handleAddToQueue(links, depth+1)
+	handleAddToQueue(links, depth+1, delay)
 }
 func HandleQueue() {
 
@@ -116,7 +120,7 @@ func HandleQueue() {
 
 			go func(link db.Queue) {
 				defer Wg.Done()
-				processPage(link.ID, link.Url.String, int(link.Depth.Int32))
+				processPage(link.ID, link.Url.String, int(link.Depth.Int32), int(link.Delay.Int32))
 			}(link)
 		}
 		Wg.Wait()

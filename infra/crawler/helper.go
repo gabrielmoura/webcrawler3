@@ -70,12 +70,15 @@ func checkTLD(link string) bool {
 	return true
 }
 
-func handleAddToQueue(links []string, depth int) {
+func handleAddToQueue(links []string, depth, delay int) {
 	for _, link := range links {
 		nLink := strings.TrimSpace(link)
 		if checkTLD(nLink) && isAllowedSchema(nLink, config.Conf.CoreConfig.AcceptableSchema.Schemas) {
-			_, err := repoDb.AddToQueueIfNotExists(context.Background(), nLink, depth)
+			_, err := repoDb.AddToQueueIfNotExists(context.Background(), nLink, depth, delay)
 			if err != nil {
+				if errors.Is(err, repoDb.ErrMaxDepthReached) {
+					return
+				}
 				log.Logger.Error("error adding link to queue", zap.String("Link", link), zap.Error(err))
 				return
 			}

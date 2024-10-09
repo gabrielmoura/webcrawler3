@@ -20,6 +20,15 @@ CREATE TABLE IF NOT EXISTS pages
 CREATE INDEX IF NOT EXISTS idx_words_gin ON pages USING GIN (words);
 CREATE INDEX IF NOT EXISTS idx_url ON pages (url);
 
+-- Criação do tipo ENUM para o status da fila
+CREATE TYPE status AS ENUM (
+    'unknown',
+    'pending',
+    'visited',
+    'error',
+    'skipped',
+    'processing_out'
+);
 -- Criação da tabela de fila
 CREATE TABLE IF NOT EXISTS queue
 (
@@ -27,9 +36,9 @@ CREATE TABLE IF NOT EXISTS queue
     url       TEXT,                                                            -- URL da fila
     depth     INTEGER,                                                         -- Profundidade da URL na fila
     timestamp TIMESTAMP WITH TIME ZONE DEFAULT NOW(),                          -- Timestamp da criação
-    status    INTEGER                                                          -- Status da URL na fila
---     delay     INTEGER DEFAULT 0                                                -- Delay para processamento da URL
---     error     jsonb                                                            -- Erro ocorrido no processamento da URL
+    status    status NOT NULL,                                                 -- Status da URL na fila
+    delay     INTEGER DEFAULT 0,                                               -- Delay para processamento da URL
+    error     JSONB                                                            -- Erro ocorrido no processamento da URL
 );
 
 -- Índices para otimização de consultas na tabela queue

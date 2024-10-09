@@ -33,7 +33,8 @@ WHERE url = $1 LIMIT 1;
 
 -- name: InsertPage :one
 INSERT INTO pages (url, title, description, meta, visited, words, links)
-VALUES (@url::text, @title::text, @description::text, @meta::jsonb, @visited::bool, @words::jsonb, @links::text[]) RETURNING *;
+VALUES (@url::text, @title::text, @description::text, @meta::jsonb, @visited::bool, @words::jsonb,
+        @links::text[]) RETURNING *;
 
 -- name: UpdatePage :one
 UPDATE pages
@@ -70,17 +71,17 @@ WHERE timestamp >= $1 AND timestamp <= $2;
 
 
 -- name: QueueInsert :one
-INSERT INTO queue (url, depth, status)
-VALUES (@url::text, @depth::int, @status::int) RETURNING *;
+INSERT INTO queue (url, depth, status, delay)
+VALUES (@url::text, @depth::int, @status, @delay::int) RETURNING *;
 
 -- name: QueueMarkAs :exec
 UPDATE queue
-SET status = @status::int
+SET status = @status
 WHERE id = @id::uuid;
 
 -- name: QueueMarkAsByUrl :exec
 UPDATE queue
-SET status = @status::int
+SET status = @status
 WHERE url = @url::text;
 
 -- name: QueueGetNext :one
@@ -98,18 +99,18 @@ ORDER BY timestamp ASC;
 -- name: QueueGetAllByStatus :many
 SELECT *
 FROM queue
-WHERE status = @status::int
+WHERE status = @status
 ORDER BY timestamp ASC
-LIMIT @_limit::int
+    LIMIT @_limit:: int
 OFFSET @_offset::int;
 
 -- name: QueueGetAllByStatusAndDepth :many
 SELECT *
 FROM queue
-WHERE status = @status::int
+WHERE status = @status
   AND depth = @depth::int
 ORDER BY timestamp ASC
-LIMIT @_limit::int
+    LIMIT @_limit:: int
 OFFSET @_offset::int;
 
 -- name: QueueGetAllByPeriod :many
@@ -121,7 +122,7 @@ ORDER BY timestamp ASC;
 -- name: QueueGetAllByStatusAndUrl :one
 SELECT *
 FROM queue
-WHERE status = @status::int
+WHERE status = @status
   AND url = @url::text
 ORDER BY timestamp ASC LIMIT 1;
 

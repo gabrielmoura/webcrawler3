@@ -187,7 +187,8 @@ func (q *Queries) GetPages(ctx context.Context, arg GetPagesParams) ([]Page, err
 
 const insertPage = `-- name: InsertPage :one
 INSERT INTO pages (url, title, description, meta, visited, words, links)
-VALUES ($1::text, $2::text, $3::text, $4::jsonb, $5::bool, $6::jsonb, $7::text[]) RETURNING id, url, links, title, description, meta, visited, timestamp, words
+VALUES ($1::text, $2::text, $3::text, $4::jsonb, $5::bool, $6::jsonb,
+        $7::text[]) RETURNING id, url, links, title, description, meta, visited, timestamp, words
 `
 
 type InsertPageParams struct {
@@ -226,7 +227,7 @@ func (q *Queries) InsertPage(ctx context.Context, arg InsertPageParams) (Page, e
 }
 
 const queueGetAll = `-- name: QueueGetAll :many
-SELECT id, url, depth, timestamp, status
+SELECT id, url, depth, timestamp, status, delay, error
 FROM queue
 ORDER BY timestamp ASC
 `
@@ -246,6 +247,8 @@ func (q *Queries) QueueGetAll(ctx context.Context) ([]Queue, error) {
 			&i.Depth,
 			&i.Timestamp,
 			&i.Status,
+			&i.Delay,
+			&i.Error,
 		); err != nil {
 			return nil, err
 		}
@@ -258,7 +261,7 @@ func (q *Queries) QueueGetAll(ctx context.Context) ([]Queue, error) {
 }
 
 const queueGetAllByPeriod = `-- name: QueueGetAllByPeriod :many
-SELECT id, url, depth, timestamp, status
+SELECT id, url, depth, timestamp, status, delay, error
 FROM queue
 WHERE timestamp >= $1 AND timestamp <= $2
 ORDER BY timestamp ASC
@@ -284,6 +287,8 @@ func (q *Queries) QueueGetAllByPeriod(ctx context.Context, arg QueueGetAllByPeri
 			&i.Depth,
 			&i.Timestamp,
 			&i.Status,
+			&i.Delay,
+			&i.Error,
 		); err != nil {
 			return nil, err
 		}
@@ -296,18 +301,18 @@ func (q *Queries) QueueGetAllByPeriod(ctx context.Context, arg QueueGetAllByPeri
 }
 
 const queueGetAllByStatus = `-- name: QueueGetAllByStatus :many
-SELECT id, url, depth, timestamp, status
+SELECT id, url, depth, timestamp, status, delay, error
 FROM queue
-WHERE status = $1::int
+WHERE status = $1
 ORDER BY timestamp ASC
-LIMIT $3::int
+    LIMIT $3:: int
 OFFSET $2::int
 `
 
 type QueueGetAllByStatusParams struct {
-	Status int32 `db:"status" json:"status"`
-	Offset int32 `db:"_offset" json:"_offset"`
-	Limit  int32 `db:"_limit" json:"_limit"`
+	Status Status `db:"status" json:"status"`
+	Offset int32  `db:"_offset" json:"_offset"`
+	Limit  int32  `db:"_limit" json:"_limit"`
 }
 
 func (q *Queries) QueueGetAllByStatus(ctx context.Context, arg QueueGetAllByStatusParams) ([]Queue, error) {
@@ -325,6 +330,8 @@ func (q *Queries) QueueGetAllByStatus(ctx context.Context, arg QueueGetAllByStat
 			&i.Depth,
 			&i.Timestamp,
 			&i.Status,
+			&i.Delay,
+			&i.Error,
 		); err != nil {
 			return nil, err
 		}
@@ -337,20 +344,20 @@ func (q *Queries) QueueGetAllByStatus(ctx context.Context, arg QueueGetAllByStat
 }
 
 const queueGetAllByStatusAndDepth = `-- name: QueueGetAllByStatusAndDepth :many
-SELECT id, url, depth, timestamp, status
+SELECT id, url, depth, timestamp, status, delay, error
 FROM queue
-WHERE status = $1::int
+WHERE status = $1
   AND depth = $2::int
 ORDER BY timestamp ASC
-LIMIT $4::int
+    LIMIT $4:: int
 OFFSET $3::int
 `
 
 type QueueGetAllByStatusAndDepthParams struct {
-	Status int32 `db:"status" json:"status"`
-	Depth  int32 `db:"depth" json:"depth"`
-	Offset int32 `db:"_offset" json:"_offset"`
-	Limit  int32 `db:"_limit" json:"_limit"`
+	Status Status `db:"status" json:"status"`
+	Depth  int32  `db:"depth" json:"depth"`
+	Offset int32  `db:"_offset" json:"_offset"`
+	Limit  int32  `db:"_limit" json:"_limit"`
 }
 
 func (q *Queries) QueueGetAllByStatusAndDepth(ctx context.Context, arg QueueGetAllByStatusAndDepthParams) ([]Queue, error) {
@@ -373,6 +380,8 @@ func (q *Queries) QueueGetAllByStatusAndDepth(ctx context.Context, arg QueueGetA
 			&i.Depth,
 			&i.Timestamp,
 			&i.Status,
+			&i.Delay,
+			&i.Error,
 		); err != nil {
 			return nil, err
 		}
@@ -385,15 +394,15 @@ func (q *Queries) QueueGetAllByStatusAndDepth(ctx context.Context, arg QueueGetA
 }
 
 const queueGetAllByStatusAndUrl = `-- name: QueueGetAllByStatusAndUrl :one
-SELECT id, url, depth, timestamp, status
+SELECT id, url, depth, timestamp, status, delay, error
 FROM queue
-WHERE status = $1::int
+WHERE status = $1
   AND url = $2::text
 ORDER BY timestamp ASC LIMIT 1
 `
 
 type QueueGetAllByStatusAndUrlParams struct {
-	Status int32  `db:"status" json:"status"`
+	Status Status `db:"status" json:"status"`
 	Url    string `db:"url" json:"url"`
 }
 
@@ -406,12 +415,14 @@ func (q *Queries) QueueGetAllByStatusAndUrl(ctx context.Context, arg QueueGetAll
 		&i.Depth,
 		&i.Timestamp,
 		&i.Status,
+		&i.Delay,
+		&i.Error,
 	)
 	return i, err
 }
 
 const queueGetNext = `-- name: QueueGetNext :one
-SELECT id, url, depth, timestamp, status
+SELECT id, url, depth, timestamp, status, delay, error
 FROM queue
 WHERE status = 1
 ORDER BY timestamp ASC LIMIT 1
@@ -426,6 +437,8 @@ func (q *Queries) QueueGetNext(ctx context.Context) (Queue, error) {
 		&i.Depth,
 		&i.Timestamp,
 		&i.Status,
+		&i.Delay,
+		&i.Error,
 	)
 	return i, err
 }
@@ -433,19 +446,25 @@ func (q *Queries) QueueGetNext(ctx context.Context) (Queue, error) {
 const queueInsert = `-- name: QueueInsert :one
 
 
-INSERT INTO queue (url, depth, status)
-VALUES ($1::text, $2::int, $3::int) RETURNING id, url, depth, timestamp, status
+INSERT INTO queue (url, depth, status, delay)
+VALUES ($1::text, $2::int, $3, $4::int) RETURNING id, url, depth, timestamp, status, delay, error
 `
 
 type QueueInsertParams struct {
 	Url    string `db:"url" json:"url"`
 	Depth  int32  `db:"depth" json:"depth"`
-	Status int32  `db:"status" json:"status"`
+	Status Status `db:"status" json:"status"`
+	Delay  int32  `db:"delay" json:"delay"`
 }
 
 // --------------------------------------------------------------------------------------------------------------------------
 func (q *Queries) QueueInsert(ctx context.Context, arg QueueInsertParams) (Queue, error) {
-	row := q.db.QueryRow(ctx, queueInsert, arg.Url, arg.Depth, arg.Status)
+	row := q.db.QueryRow(ctx, queueInsert,
+		arg.Url,
+		arg.Depth,
+		arg.Status,
+		arg.Delay,
+	)
 	var i Queue
 	err := row.Scan(
 		&i.ID,
@@ -453,18 +472,20 @@ func (q *Queries) QueueInsert(ctx context.Context, arg QueueInsertParams) (Queue
 		&i.Depth,
 		&i.Timestamp,
 		&i.Status,
+		&i.Delay,
+		&i.Error,
 	)
 	return i, err
 }
 
 const queueMarkAs = `-- name: QueueMarkAs :exec
 UPDATE queue
-SET status = $1::int
+SET status = $1
 WHERE id = $2::uuid
 `
 
 type QueueMarkAsParams struct {
-	Status int32       `db:"status" json:"status"`
+	Status Status      `db:"status" json:"status"`
 	ID     pgtype.UUID `db:"id" json:"id"`
 }
 
@@ -475,12 +496,12 @@ func (q *Queries) QueueMarkAs(ctx context.Context, arg QueueMarkAsParams) error 
 
 const queueMarkAsByUrl = `-- name: QueueMarkAsByUrl :exec
 UPDATE queue
-SET status = $1::int
+SET status = $1
 WHERE url = $2::text
 `
 
 type QueueMarkAsByUrlParams struct {
-	Status int32  `db:"status" json:"status"`
+	Status Status `db:"status" json:"status"`
 	Url    string `db:"url" json:"url"`
 }
 
