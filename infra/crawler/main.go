@@ -5,7 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/google/uuid"
 	"go.uber.org/zap"
 	"golang.org/x/net/html"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -26,7 +26,7 @@ var (
 )
 
 // processPage processa uma página, extrai links e dados
-func processPage(queueId pgtype.UUID, pageUrl string, depth, delay int) {
+func processPage(queueId uuid.UUID, pageUrl string, depth, delay int) {
 	dataPageCtx, cancel := context.WithCancel(context.Background())
 	if depth > config.Conf.MaxDepth {
 		log.Logger.Info("Reached max depth", zap.Int("depth", depth), zap.Int("maxDepth", config.Conf.MaxDepth))
@@ -137,7 +137,7 @@ func HandleQueue() {
 	}
 }
 
-func visitLink(ctx context.Context, pageUrl string, queueId pgtype.UUID) ([]byte, *html.Node, error) {
+func visitLink(ctx context.Context, pageUrl string, queueId uuid.UUID) ([]byte, *html.Node, error) {
 	resp, err := httpRequest(ctx, pageUrl)
 	if err != nil {
 		return nil, nil, fmt.Errorf("error fetching URL %s: %w", pageUrl, err)

@@ -7,13 +7,14 @@ package db
 import (
 	"context"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type Querier interface {
-	DeletePage(ctx context.Context, id pgtype.UUID) (Page, error)
+	DeletePage(ctx context.Context, id uuid.UUID) (Page, error)
 	DeletePageByUrl(ctx context.Context, url pgtype.Text) (Page, error)
-	GetPage(ctx context.Context, id pgtype.UUID) (Page, error)
+	GetPage(ctx context.Context, id uuid.UUID) (Page, error)
 	GetPageByDate(ctx context.Context, arg GetPageByDateParams) ([]Page, error)
 	GetPageByUrl(ctx context.Context, url pgtype.Text) (Page, error)
 	GetPages(ctx context.Context, arg GetPagesParams) ([]Page, error)

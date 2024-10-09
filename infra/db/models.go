@@ -8,6 +8,7 @@ import (
 	"database/sql/driver"
 	"fmt"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -73,7 +74,7 @@ func (e Status) Valid() bool {
 }
 
 type Page struct {
-	ID          pgtype.UUID        `db:"id" json:"id"`
+	ID          uuid.UUID          `db:"id" json:"id"`
 	Url         pgtype.Text        `db:"url" json:"url"`
 	Links       []string           `db:"links" json:"links"`
 	Title       pgtype.Text        `db:"title" json:"title"`
@@ -85,7 +86,7 @@ type Page struct {
 }
 
 type Queue struct {
-	ID        pgtype.UUID        `db:"id" json:"id"`
+	ID        uuid.UUID          `db:"id" json:"id"`
 	Url       pgtype.Text        `db:"url" json:"url"`
 	Depth     pgtype.Int4        `db:"depth" json:"depth"`
 	Timestamp pgtype.Timestamptz `db:"timestamp" json:"timestamp"`

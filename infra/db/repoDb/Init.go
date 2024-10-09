@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"go.uber.org/zap"
 	"strings"
@@ -17,7 +18,6 @@ import (
 	"webCrawler3/infra/pb"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 var (
@@ -137,19 +137,19 @@ func RetrieveFromQueue(ctx context.Context, limit, offset int) ([]db.Queue, erro
 
 	return queueItems, nil
 }
-func MarkAsVisited(ctx context.Context, id pgtype.UUID) error {
+func MarkAsVisited(ctx context.Context, id uuid.UUID) error {
 	return DbQueries.QueueMarkAs(ctx, db.QueueMarkAsParams{
 		ID:     id,
 		Status: db.StatusVisited,
 	})
 }
-func MarkAsError(ctx context.Context, id pgtype.UUID) error {
+func MarkAsError(ctx context.Context, id uuid.UUID) error {
 	return DbQueries.QueueMarkAs(ctx, db.QueueMarkAsParams{
 		ID:     id,
 		Status: db.StatusError,
 	})
 }
-func MarkAsSkipped(ctx context.Context, id pgtype.UUID) error {
+func MarkAsSkipped(ctx context.Context, id uuid.UUID) error {
 	addQueue.Lock()
 	defer addQueue.Unlock()
 	return DbQueries.QueueMarkAs(ctx, db.QueueMarkAsParams{
@@ -157,7 +157,7 @@ func MarkAsSkipped(ctx context.Context, id pgtype.UUID) error {
 		Status: db.StatusSkipped,
 	})
 }
-func MarkAsProcessing(ctx context.Context, id pgtype.UUID) error {
+func MarkAsProcessing(ctx context.Context, id uuid.UUID) error {
 	return DbQueries.QueueMarkAs(ctx, db.QueueMarkAsParams{
 		ID:     id,
 		Status: db.StatusProcessing,
@@ -179,7 +179,7 @@ func SavePage(ctx context.Context, page *pb.Page) (db.Page, error) {
 	})
 }
 
-func SavePageAndMarkVisited(ctx context.Context, page *pb.Page, queueId pgtype.UUID) error {
+func SavePageAndMarkVisited(ctx context.Context, page *pb.Page, queueId uuid.UUID) error {
 	return runWithTX(ctx, Pool, func(tx *db.Queries) error {
 		metaData, _ := json.Marshal(page.Meta)
 		wordList, _ := json.Marshal(page.Words)

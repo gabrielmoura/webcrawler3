@@ -8,6 +8,7 @@ package db
 import (
 	"context"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -17,7 +18,7 @@ FROM pages
 WHERE id = $1 RETURNING id, url, links, title, description, meta, visited, timestamp, words
 `
 
-func (q *Queries) DeletePage(ctx context.Context, id pgtype.UUID) (Page, error) {
+func (q *Queries) DeletePage(ctx context.Context, id uuid.UUID) (Page, error) {
 	row := q.db.QueryRow(ctx, deletePage, id)
 	var i Page
 	err := row.Scan(
@@ -63,7 +64,7 @@ FROM pages
 WHERE id = $1 LIMIT 1
 `
 
-func (q *Queries) GetPage(ctx context.Context, id pgtype.UUID) (Page, error) {
+func (q *Queries) GetPage(ctx context.Context, id uuid.UUID) (Page, error) {
 	row := q.db.QueryRow(ctx, getPage, id)
 	var i Page
 	err := row.Scan(
@@ -485,8 +486,8 @@ WHERE id = $2::uuid
 `
 
 type QueueMarkAsParams struct {
-	Status Status      `db:"status" json:"status"`
-	ID     pgtype.UUID `db:"id" json:"id"`
+	Status Status    `db:"status" json:"status"`
+	ID     uuid.UUID `db:"id" json:"id"`
 }
 
 func (q *Queries) QueueMarkAs(ctx context.Context, arg QueueMarkAsParams) error {
@@ -625,7 +626,7 @@ WHERE id = $1 RETURNING id, url, links, title, description, meta, visited, times
 `
 
 type UpdatePageParams struct {
-	ID          pgtype.UUID        `db:"id" json:"id"`
+	ID          uuid.UUID          `db:"id" json:"id"`
 	Title       pgtype.Text        `db:"title" json:"title"`
 	Description pgtype.Text        `db:"description" json:"description"`
 	Meta        []byte             `db:"meta" json:"meta"`
