@@ -27,7 +27,8 @@ CREATE TYPE status AS ENUM (
     'visited',
     'error',
     'skipped',
-    'processing_out'
+    'processing_out',
+    'processing'
 );
 -- Criação da tabela de fila
 CREATE TABLE IF NOT EXISTS queue

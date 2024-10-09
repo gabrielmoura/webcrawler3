@@ -1,10 +1,10 @@
 package crawler
 
 import (
+	"context"
 	"go.uber.org/zap"
 	"net/http"
 	"net/url"
-	"time"
 	"webCrawler3/config"
 	"webCrawler3/infra/log"
 )
@@ -20,7 +20,7 @@ func proxyClient() *http.Client {
 
 	client := &http.Client{
 		Transport: transport,
-		Timeout:   30 * time.Second, // Definir um timeout de 5 segundos
+		Timeout:   config.Conf.GetReqTimeout(), // Definir um timeout de 5 segundos
 	}
 
 	return client
@@ -30,16 +30,18 @@ func httpClient() *http.Client {
 		return proxyClient()
 	} else {
 		return &http.Client{
-			Timeout: 5 * time.Second, // Definir um timeout de 5 segundos
+			Timeout: config.Conf.GetReqTimeout(), // Definir um timeout de 5 segundos
 			Transport: &http.Transport{
-				MaxIdleConns:        10,
-				MaxIdleConnsPerHost: 10,
+				//MaxIdleConns:        2,                           // Limite de conexões ociosas
+				//MaxIdleConnsPerHost: 20,                          // Limite de conexões ociosas por host
+				IdleConnTimeout: config.Conf.GetReqTimeout(), // Tempo máximo para conexões ociosas
 			},
 		}
 	}
 }
 
-func httpRequest(pageUrl string) (resp *http.Response, err error) {
+func httpRequest(ctx context.Context, pageUrl string) (resp *http.Response, err error) {
+	context.WithTimeout(ctx, config.Conf.GetReqTimeout())
 	client := httpClient()
 	req, err := http.NewRequest("GET", pageUrl, nil)
 	if err != nil {
@@ -49,6 +51,14 @@ func httpRequest(pageUrl string) (resp *http.Response, err error) {
 	req.Header.Set("User-Agent", config.Conf.UserAgent)
 
 	req.Header.Set("Accept", config.Conf.GetAcceptableMimeType())
+
+	if config.Conf.HintsEnabled() {
+		for key, value := range config.Conf.GetHints() {
+			req.Header.Set(key, value)
+		}
+	}
+
+	req.WithContext(ctx)
 
 	resp, err = client.Do(req)
 	return

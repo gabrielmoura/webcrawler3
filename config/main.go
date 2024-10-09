@@ -2,18 +2,15 @@ package config
 
 import (
 	"errors"
+	"fmt"
 	"github.com/spf13/viper"
 	"regexp"
 	"strings"
+	"time"
 	"webCrawler3/infra/log"
 )
 
-func splitComma(txt string) []string {
-	if txt == "" {
-		return []string{}
-	}
-	return strings.Split(txt, ",")
-}
+// Client Hints
 
 type Config struct {
 	MaxConcurrency int          `mapstructure:"MAX_CONCURRENCY"`
@@ -53,6 +50,7 @@ func loadByFlag(cfg *Config) error {
 	return nil
 }
 
+// GetAcceptableMimeType returns the acceptable mime types
 func (c *Config) GetAcceptableMimeType() string {
 	var queryBuilder strings.Builder
 	for _, acceptMime := range c.CoreConfig.AcceptableMimeTypes.MimeTypes {
@@ -62,13 +60,40 @@ func (c *Config) GetAcceptableMimeType() string {
 	return queryBuilder.String()
 }
 
+// GetDBMaxConns returns the maximum number of connections to the database
 func (c *Config) GetDBMaxConns() int32 {
 	// +2 para conexões de controle
 	return int32(c.MaxConcurrency) + 2
 }
+
+// GetDBMinConns returns the minimum number of connections to the database
 func (c *Config) GetDBMinConns() int32 {
 	// 50% do máximo
 	return int32(c.MaxConcurrency / 2)
+}
+
+// GetReqTimeout returns the request timeout
+func (c *Config) GetReqTimeout() time.Duration {
+	if c.Proxy.Enabled {
+		return 30 * time.Second
+	}
+	return 5 * time.Second
+}
+
+// GetCrlIdleTime returns the time to sleep when the queue is empty
+func (c *Config) GetCrlIdleTime() time.Duration {
+	return 5 * time.Second
+}
+
+// GetAddrManager returns the address to listen
+func (c *Config) GetAddrManager() string {
+	return fmt.Sprintf(":%d", c.Port)
+}
+func (c *Config) GetHints() map[string]string {
+	return c.CoreConfig.ClientHints.Hints
+}
+func (c *Config) HintsEnabled() bool {
+	return c.CoreConfig.ClientHints.Enabled
 }
 
 func loadByConfigFile() error {
@@ -104,6 +129,7 @@ func loadByConfigFile() error {
 	vip.SetDefault("CORE_CONFIG.DENY_SUFFIXES.SUFFIXES", coreDefaultConfig.DenySuffixes.Suffixes)
 	vip.SetDefault("CORE_CONFIG.COMMON_STOP_WORDS.LANGUAGE_STOP_WORDS", coreDefaultConfig.CommonStopWords.LanguageStopWords)
 	vip.SetDefault("CORE_CONFIG.MAP_WORDS_TYPE", coreDefaultConfig.MapWordsType)
+	vip.SetDefault("CORE_CONFIG.CLIENT_HINTS", coreDefaultConfig.ClientHints)
 
 	// Lendo o arquivo de configuração conf.yml
 	vip.SetConfigName("conf")
@@ -194,10 +220,4 @@ func LoadConfig() error {
 	//	})
 	//
 	//}
-}
-func Ternary[T any](statement bool, a, b T) T {
-	if statement {
-		return a
-	}
-	return b
 }

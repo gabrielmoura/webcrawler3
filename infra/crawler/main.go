@@ -59,7 +59,7 @@ func processPage(queueId pgtype.UUID, pageUrl string, depth, delay int) {
 	}
 
 	log.Logger.Info("Visiting", zap.String("url", pageUrl))
-	plainText, htmlDoc, err := visitLink(pageUrl, queueId)
+	plainText, htmlDoc, err := visitLink(dataPageCtx, pageUrl, queueId)
 	if err != nil {
 		if errors.Is(err, mimeNotAllow) {
 			//log.Logger.Info(fmt.Sprintf("MIME not allowed: %s", pageUrl))
@@ -93,8 +93,14 @@ func processPage(queueId pgtype.UUID, pageUrl string, depth, delay int) {
 	dataPage.Timestamp = timestamppb.Now()
 	dataPage.Visited = true
 
+	// Salva a página e marca como visitada
+	// Se houver um erro, marca item na fila como erro
 	if err := repoDb.SavePageAndMarkVisited(dataPageCtx, dataPage, queueId); err != nil {
-		log.Logger.Error("Error saving page", zap.Error(err))
+		log.Logger.Error("Error saving page", zap.Error(err), zap.String("url", pageUrl))
+		err := repoDb.MarkAsError(context.Background(), queueId)
+		if err != nil {
+			return
+		}
 		return
 	}
 
@@ -112,7 +118,7 @@ func HandleQueue() {
 		}
 		if len(links) == 0 {
 			log.Logger.Info("No links in queue, sleeping for 5 seconds and retrying", zap.Any("links", links))
-			time.Sleep(5 * time.Second)
+			time.Sleep(config.Conf.GetCrlIdleTime())
 			continue
 		}
 
@@ -131,8 +137,8 @@ func HandleQueue() {
 	}
 }
 
-func visitLink(pageUrl string, queueId pgtype.UUID) ([]byte, *html.Node, error) {
-	resp, err := httpRequest(pageUrl)
+func visitLink(ctx context.Context, pageUrl string, queueId pgtype.UUID) ([]byte, *html.Node, error) {
+	resp, err := httpRequest(ctx, pageUrl)
 	if err != nil {
 		return nil, nil, fmt.Errorf("error fetching URL %s: %w", pageUrl, err)
 	}

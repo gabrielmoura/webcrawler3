@@ -2,7 +2,6 @@ package router
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"time"
 	"webCrawler3/config"
@@ -25,11 +24,11 @@ func InitRouters(ctx context.Context, conf *config.Config) {
 	mux.HandleFunc("/api/v1/manager", handler.HandlerMaganer)
 
 	s := &http.Server{
-		Addr:           fmt.Sprintf(":%d", conf.Port),
+		Addr:           config.Conf.GetAddrManager(),
 		Handler:        mux,
-		ReadTimeout:    10 * time.Second,
-		WriteTimeout:   10 * time.Second,
-		MaxHeaderBytes: 1 << 20,
+		ReadTimeout:    10 * time.Second, // Tempo máximo para leitura
+		WriteTimeout:   10 * time.Second, // Tempo máximo para escrita
+		MaxHeaderBytes: 1 << 10,          // 1 KB
 	}
 
 	go func() {

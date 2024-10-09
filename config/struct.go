@@ -20,12 +20,18 @@ type CommonStopWords struct {
 
 type MapWordsType map[string]uint32
 
+type ClientHints struct {
+	Enabled bool              ` json:"enabled,omitempty" yaml:"enabled" mapstructure:"enabled"`
+	Hints   map[string]string ` json:"hints,omitempty" yaml:"hints" mapstructure:"hints"`
+}
+
 type CoreConfig struct {
 	AcceptableMimeTypes *AcceptableMimeTypes ` json:"acceptable_mime_types,omitempty" yaml:"acceptableMimeTypes" mapstructure:"acceptable_mime_types"`
 	AcceptableSchema    *AcceptableSchema    ` json:"acceptable_schema,omitempty" yaml:"acceptableSchema" mapstructure:"acceptable_schema"`
 	DenySuffixes        *DenySuffixes        ` json:"deny_suffixes,omitempty" yaml:"denySuffixes" mapstructure:"deny_suffixes"`
 	CommonStopWords     *CommonStopWords     ` json:"common_stop_words,omitempty" yaml:"commonStopWords" mapstructure:"common_stop_words"`
 	MapWordsType        *MapWordsType        ` json:"map_words_type,omitempty" yaml:"mapWordsType" mapstructure:"map_words_type"`
+	ClientHints         *ClientHints         ` json:"client_hints,omitempty" yaml:"clientHints" mapstructure:"client_hints"`
 }
 
 func genDefaultConfig() *CoreConfig {
@@ -153,6 +159,19 @@ func genDefaultConfig() *CoreConfig {
 						"没", "吧", "定", "得", "该", "好好", "家", "种", "那", "里", "然", "其", "间", "什", "么", "很", "得", "哪", "些",
 						"向", "生", "里", "果", "再", "两", "并", "而", "些", "定"},
 				},
+			},
+		},
+		ClientHints: &ClientHints{
+			Enabled: false,
+			Hints: map[string]string{
+				"sec-ch-ua":          `"Chromium";v="128", "Not;A=Brand";v="24", "Crl";v="128"`,
+				"sec-ch-ua-mobile":   "?0",
+				"sec-ch-ua-platform": `"Linux"`,
+				"sec-fetch-dest":     "document",
+				"sec-fetch-mode":     "navigate",
+				"sec-fetch-site":     "none",
+				"sec-fetch-user":     "?1",
+				"sec-gpc":            "1",
 			},
 		},
 	}

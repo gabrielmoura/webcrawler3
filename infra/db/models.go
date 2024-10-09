@@ -20,6 +20,7 @@ const (
 	StatusError         Status = "error"
 	StatusSkipped       Status = "skipped"
 	StatusProcessingOut Status = "processing_out"
+	StatusProcessing    Status = "processing"
 )
 
 func (e *Status) Scan(src interface{}) error {
@@ -64,7 +65,8 @@ func (e Status) Valid() bool {
 		StatusVisited,
 		StatusError,
 		StatusSkipped,
-		StatusProcessingOut:
+		StatusProcessingOut,
+		StatusProcessing:
 		return true
 	}
 	return false

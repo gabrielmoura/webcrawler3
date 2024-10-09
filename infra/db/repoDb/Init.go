@@ -96,19 +96,43 @@ func AddToQueueIfNotExists(ctx context.Context, url string, depth, delay int) (d
 
 // RetrieveFromQueue fetches pending URLs from the queue
 func RetrieveFromQueue(ctx context.Context, limit, offset int) ([]db.Queue, error) {
-	var limitInt32 int32 = int32(limit)
+	// Set default limit if not provided
 	if limit == 0 {
-		limitInt32 = 10
+		limit = 10
 	}
+
 	params := &db.QueueGetAllByStatusParams{
 		Status: db.StatusPending,
-		Limit:  limitInt32,
+		Limit:  int32(limit),
 		Offset: int32(offset),
 	}
-	queueItems, err := DbQueries.QueueGetAllByStatus(ctx, *params)
+	var queueItems []db.Queue
+
+	err := runWithTX(ctx, Pool, func(tx *db.Queries) error {
+		items, err := DbQueries.QueueGetAllByStatus(ctx, *params)
+		if err != nil {
+			log.Logger.Error("Error retrieving queue items", zap.Error(err))
+			return err
+		}
+		for _, queueItem := range items {
+			err := DbQueries.QueueMarkAs(ctx, db.QueueMarkAsParams{
+				ID:     queueItem.ID,
+				Status: db.StatusProcessing,
+			})
+			if err != nil {
+				log.Logger.Error("Error marking as processing", zap.Error(err))
+				return err
+			}
+		}
+		queueItems = items
+
+		return nil
+	})
 	if err != nil {
-		log.Logger.Error("Error retrieving queue items", zap.Error(err))
 		return nil, err
+	}
+	if len(queueItems) == 0 {
+		return nil, pgx.ErrNoRows
 	}
 
 	return queueItems, nil
@@ -131,6 +155,12 @@ func MarkAsSkipped(ctx context.Context, id pgtype.UUID) error {
 	return DbQueries.QueueMarkAs(ctx, db.QueueMarkAsParams{
 		ID:     id,
 		Status: db.StatusSkipped,
+	})
+}
+func MarkAsProcessing(ctx context.Context, id pgtype.UUID) error {
+	return DbQueries.QueueMarkAs(ctx, db.QueueMarkAsParams{
+		ID:     id,
+		Status: db.StatusProcessing,
 	})
 }
 
@@ -267,6 +297,32 @@ func PrepareHealth(ctx context.Context) []error {
 			visitedPages[page.Url.String] = true // Mark URL as visited
 		}
 		return nil // Successfully processed all pages
+	}))
+
+	// 3. Retrieve all queue marked as processing and mark as pending
+	errorList = append(errorList, runWithTX(ctx, Pool, func(tx *db.Queries) error {
+		// Fetch all queues marked as processing
+		queues, err := tx.QueueGetAllByStatus(ctx, db.QueueGetAllByStatusParams{
+			Status: db.StatusProcessing,
+			Limit:  100,
+			Offset: 0,
+		})
+		if err != nil {
+			return err // Return error if fetching queues fails
+		}
+		log.Logger.Debug("Processing queues", zap.Int("count", len(queues)))
+
+		// Mark queues as pending
+		for _, queue := range queues {
+			if err := tx.QueueMarkAs(ctx, db.QueueMarkAsParams{
+				ID:     queue.ID,
+				Status: db.StatusPending,
+			}); err != nil {
+				return err // Return error if marking fails
+			}
+			log.Logger.Debug("Marked as pending", zap.String("url", queue.Url.String))
+		}
+		return nil // Successfully processed all queues
 	}))
 
 	return errorList // Return the list of errors encountered
