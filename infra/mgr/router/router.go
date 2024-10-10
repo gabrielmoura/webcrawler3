@@ -21,7 +21,16 @@ func InitRouters(ctx context.Context, conf *config.Config) {
 	mux.HandleFunc("/api/v1/manager/queue", handler.HandlerQueue)
 	mux.HandleFunc("/api/v1/manager/search", handler.HandlerSearch)
 	mux.HandleFunc("/api/v1/manager/crawl", handler.HandlerCrawl)
+
+	// Graph
+	mux.HandleFunc("/api/v1/manager/graph", handler.HandlerGraph)
+	//mux.HandleFunc("/api/v1/manager/graph", cacheMiddleware(10)(handler.HandlerGraph))
+
 	mux.HandleFunc("/api/v1/manager", handler.HandlerMaganer)
+
+	// load static files
+	//fs := http.FileServer(http.Dir("./web"))
+	//mux.Handle("/", fs)
 
 	s := &http.Server{
 		Addr:           config.Conf.GetAddrManager(),
@@ -40,3 +49,25 @@ func InitRouters(ctx context.Context, conf *config.Config) {
 		return
 	}
 }
+
+//func cacheMiddleware(ttl int) func(http.HandlerFunc) http.HandlerFunc {
+//	var cache = make(map[string][]byte)
+//	return func(next http.HandlerFunc) http.HandlerFunc {
+//		return func(w http.ResponseWriter, r *http.Request) {
+//			// Check if the request method is GET
+//			if r.Method != http.MethodGet {
+//				next(w, r)
+//				return
+//			}
+//
+//			// Check if the request URL is in the cache
+//			if data, found := cache[r.RequestURI]; found {
+//				w.Write(data)
+//				return
+//			}
+//
+//			// Call the next handler
+//			next(w, r)
+//		}
+//	}
+//}

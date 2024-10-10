@@ -327,6 +327,65 @@ func PrepareHealth(ctx context.Context) []error {
 
 	return errorList // Return the list of errors encountered
 }
+func SearchByWeightWithPagination(ctx context.Context, terms string, limit, offset int32) ([]db.Page, error) {
+	// Separe os termos em palavras por espaço
+	words := strings.Fields(terms)
+
+	// Use strings.Builder para construir a query
+	var queryBuilder strings.Builder
+	queryBuilder.WriteString("SELECT id, url, title, description, visited, timestamp")
+
+	// Monte a cláusula WHERE
+	queryBuilder.WriteString(" FROM pages WHERE ")
+	for i, word := range words {
+		if i > 0 {
+			queryBuilder.WriteString(" OR ")
+		}
+		queryBuilder.WriteString(fmt.Sprintf("words ? '%s'", word))
+	}
+
+	// Monte a cláusula ORDER BY
+	queryBuilder.WriteString(" ORDER BY ")
+	for i, word := range words {
+		if i > 0 {
+			queryBuilder.WriteString(", ")
+		}
+		queryBuilder.WriteString(fmt.Sprintf("COALESCE(words ->> '%s', '0')::int DESC", word))
+	}
+
+	// Adicione LIMIT e OFFSET
+	queryBuilder.WriteString(fmt.Sprintf(" LIMIT %d OFFSET %d", limit, offset))
+
+	// Execute a query
+	query := queryBuilder.String()
+	rows, err := Pool.Query(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	// Mapeie os resultados
+	var pages []db.Page
+	for rows.Next() {
+		var page db.Page
+		if err := rows.Scan(
+			&page.ID,
+			&page.Url,
+			//&page.Links,
+			&page.Title,
+			&page.Description,
+			//&page.Meta,
+			&page.Visited,
+			&page.Timestamp,
+			//&page.Words,
+		); err != nil {
+			return nil, err
+		}
+		pages = append(pages, page)
+	}
+
+	return pages, nil
+}
 
 func SearchByWeight(ctx context.Context, terms string) ([]db.Page, error) {
 	// Separe os termos em palavras por espaço
@@ -391,4 +450,29 @@ func AddHelperI2P(ctx context.Context, url string) (db.Queue, error) {
 		Status: db.StatusUnknown,
 	})
 	return queueEntry, err
+}
+
+func GetPagesForGraph(ctx context.Context) ([]db.GetAllPagesForGraphRow, error) {
+	pages, err := DbQueries.GetAllPagesForGraph(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return pages, nil
+}
+
+func GetQueue(ctx context.Context, limit, offset int32, strStatus string) ([]db.Queue, error) {
+	status := db.Status(strStatus)
+	if !status.Valid() {
+		return nil, fmt.Errorf("invalid status")
+	}
+
+	queues, err := DbQueries.QueueGetAllByStatus(ctx, db.QueueGetAllByStatusParams{
+		Status: status,
+		Limit:  limit,
+		Offset: offset,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return queues, nil
 }

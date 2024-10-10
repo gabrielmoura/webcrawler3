@@ -58,6 +58,43 @@ func (q *Queries) DeletePageByUrl(ctx context.Context, url pgtype.Text) (Page, e
 	return i, err
 }
 
+const getAllPagesForGraph = `-- name: GetAllPagesForGraph :many
+SELECT ID, title, url, links
+FROM pages
+`
+
+type GetAllPagesForGraphRow struct {
+	ID    uuid.UUID   `db:"id" json:"id"`
+	Title pgtype.Text `db:"title" json:"title"`
+	Url   pgtype.Text `db:"url" json:"url"`
+	Links []string    `db:"links" json:"links"`
+}
+
+func (q *Queries) GetAllPagesForGraph(ctx context.Context) ([]GetAllPagesForGraphRow, error) {
+	rows, err := q.db.Query(ctx, getAllPagesForGraph)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetAllPagesForGraphRow
+	for rows.Next() {
+		var i GetAllPagesForGraphRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.Url,
+			&i.Links,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getPage = `-- name: GetPage :one
 SELECT id, url, links, title, description, meta, visited, timestamp, words
 FROM pages
@@ -422,6 +459,47 @@ func (q *Queries) QueueGetAllByStatusAndUrl(ctx context.Context, arg QueueGetAll
 	return i, err
 }
 
+const queueGetAllWithPagination = `-- name: QueueGetAllWithPagination :many
+SELECT id, url, depth, timestamp, status, delay, error
+FROM queue
+ORDER BY timestamp ASC
+LIMIT $2:: int
+OFFSET $1::int
+`
+
+type QueueGetAllWithPaginationParams struct {
+	Offset int32 `db:"_offset" json:"_offset"`
+	Limit  int32 `db:"_limit" json:"_limit"`
+}
+
+func (q *Queries) QueueGetAllWithPagination(ctx context.Context, arg QueueGetAllWithPaginationParams) ([]Queue, error) {
+	rows, err := q.db.Query(ctx, queueGetAllWithPagination, arg.Offset, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Queue
+	for rows.Next() {
+		var i Queue
+		if err := rows.Scan(
+			&i.ID,
+			&i.Url,
+			&i.Depth,
+			&i.Timestamp,
+			&i.Status,
+			&i.Delay,
+			&i.Error,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const queueGetNext = `-- name: QueueGetNext :one
 SELECT id, url, depth, timestamp, status, delay, error
 FROM queue
@@ -508,6 +586,24 @@ type QueueMarkAsByUrlParams struct {
 
 func (q *Queries) QueueMarkAsByUrl(ctx context.Context, arg QueueMarkAsByUrlParams) error {
 	_, err := q.db.Exec(ctx, queueMarkAsByUrl, arg.Status, arg.Url)
+	return err
+}
+
+const queueMarkAsWithError = `-- name: QueueMarkAsWithError :exec
+UPDATE queue
+SET status = $1,
+    error  = $2::jsonb
+WHERE id = $3::uuid
+`
+
+type QueueMarkAsWithErrorParams struct {
+	Status Status    `db:"status" json:"status"`
+	Error  []byte    `db:"error" json:"error"`
+	ID     uuid.UUID `db:"id" json:"id"`
+}
+
+func (q *Queries) QueueMarkAsWithError(ctx context.Context, arg QueueMarkAsWithErrorParams) error {
+	_, err := q.db.Exec(ctx, queueMarkAsWithError, arg.Status, arg.Error, arg.ID)
 	return err
 }
 

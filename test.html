@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Relacionamento entre as páginas</title>
+
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+
+
+    <script src="https://visjs.github.io/vis-network/standalone/umd/vis-network.min.js"></script>
+</head>
+<body onload="draw()">
+<div class="flex items-center justify-center h-screen bg-gray-100">
+    <div class="text-center">
+        <h1 class="text-2xl font-bold mb-4">Relacionamento entre as páginas</h1>
+
+        <div id="mynetwork" class=" h-5/6 border border-gray-300" style="width: 800px;height: 800px"></div>
+    </div>
+</div>
+<script>
+    async function fetchGraphData() {
+        try {
+            const response = await fetch("http://localhost:9090/api/v1/manager/graph");
+            const data = await response.json();
+            sessionStorage.setItem('graphData', JSON.stringify(data));
+            return data;
+        } catch (error) {
+            console.error("Error fetching graph data:", error);
+            return null;
+        }
+    }
+
+    function getGraphData() {
+        const data = sessionStorage.getItem('graphData');
+        return data ? JSON.parse(data) : null;
+    }
+
+    async function draw() {
+        let data = getGraphData();
+
+        if (!data) {
+            data = await fetchGraphData();
+            if (!data) return; // Se não houver dados, sair da função
+        }
+
+        const container = document.getElementById("mynetwork");
+
+        const options = {
+            nodes: {
+                shape: "dot",
+                size: 16,
+                scaling: {
+                    Min: 10,
+                    Max: 30,
+                    // label: {
+                    //     Min: 8,
+                    //     Max: 30,
+                    //     drawThreshold: 12,
+                    //     maxVisible: 20,
+                    // },
+                },
+                font: {
+                    size: 12,
+                    face: "Tahoma",
+                },
+            },
+            edges: {
+                width: 0.15,
+                color: {
+                    inherit: "from",
+                    opacity: 0.5,
+                },
+                smooth: {
+                    type: "continuous",
+                },
+            },
+            interaction: {
+                tooltipDelay: 200,
+                // hideEdgesOnDrag: true,
+                // hideEdgesOnZoom: true,
+            },
+            // layout: {
+            //     improvedLayout: false, // Disable the improved layout
+            //
+            // },
+            // physics:false,
+            physics: {
+                enabled: true,
+                barnesHut: {
+                    gravitationalConstant: -80000,
+                    centralGravity: 0.3,
+                    springLength: 95,
+                    springConstant: 0.04,
+                    damping: 0.09,
+                    avoidOverlap: 0
+                },
+                maxVelocity: 70,
+                minVelocity: 0.75,
+                solver: "barnesHut",
+                stabilization: {
+                    enabled: true,
+                    iterations: 1000,
+                    updateInterval: 1000,
+                    onlyDynamicEdges: false,
+                    fit: true
+                },
+                timestep: 0.5,
+                adaptiveTimestep: true
+            },
+        };
+
+        new vis.Network(container, data, options);
+    }
+</script>
+</body>
+</html>

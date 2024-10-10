@@ -14,6 +14,7 @@ import (
 type Querier interface {
 	DeletePage(ctx context.Context, id uuid.UUID) (Page, error)
 	DeletePageByUrl(ctx context.Context, url pgtype.Text) (Page, error)
+	GetAllPagesForGraph(ctx context.Context) ([]GetAllPagesForGraphRow, error)
 	GetPage(ctx context.Context, id uuid.UUID) (Page, error)
 	GetPageByDate(ctx context.Context, arg GetPageByDateParams) ([]Page, error)
 	GetPageByUrl(ctx context.Context, url pgtype.Text) (Page, error)
@@ -24,11 +25,13 @@ type Querier interface {
 	QueueGetAllByStatus(ctx context.Context, arg QueueGetAllByStatusParams) ([]Queue, error)
 	QueueGetAllByStatusAndDepth(ctx context.Context, arg QueueGetAllByStatusAndDepthParams) ([]Queue, error)
 	QueueGetAllByStatusAndUrl(ctx context.Context, arg QueueGetAllByStatusAndUrlParams) (Queue, error)
+	QueueGetAllWithPagination(ctx context.Context, arg QueueGetAllWithPaginationParams) ([]Queue, error)
 	QueueGetNext(ctx context.Context) (Queue, error)
 	//--------------------------------------------------------------------------------------------------------------------------
 	QueueInsert(ctx context.Context, arg QueueInsertParams) (Queue, error)
 	QueueMarkAs(ctx context.Context, arg QueueMarkAsParams) error
 	QueueMarkAsByUrl(ctx context.Context, arg QueueMarkAsByUrlParams) error
+	QueueMarkAsWithError(ctx context.Context, arg QueueMarkAsWithErrorParams) error
 	SearchBy(ctx context.Context, words []byte) ([]SearchByRow, error)
 	// Case-insensitive search in description
 	SearchByContent(ctx context.Context, words []byte) ([]SearchByContentRow, error)

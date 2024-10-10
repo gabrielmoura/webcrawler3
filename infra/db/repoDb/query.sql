@@ -66,6 +66,9 @@ SELECT *
 FROM pages
 WHERE timestamp >= $1 AND timestamp <= $2;
 
+-- name: GetAllPagesForGraph :many
+SELECT ID, title, url, links
+FROM pages ;
 
 ----------------------------------------------------------------------------------------------------------------------------
 
@@ -77,6 +80,12 @@ VALUES (@url::text, @depth::int, @status, @delay::int) RETURNING *;
 -- name: QueueMarkAs :exec
 UPDATE queue
 SET status = @status
+WHERE id = @id::uuid;
+
+-- name: QueueMarkAsWithError :exec
+UPDATE queue
+SET status = @status,
+    error  = @error::jsonb
 WHERE id = @id::uuid;
 
 -- name: QueueMarkAsByUrl :exec
@@ -95,6 +104,12 @@ SELECT *
 FROM queue
 ORDER BY timestamp ASC;
 
+-- name: QueueGetAllWithPagination :many
+SELECT *
+FROM queue
+ORDER BY timestamp ASC
+LIMIT @_limit:: int
+OFFSET @_offset::int;
 
 -- name: QueueGetAllByStatus :many
 SELECT *
