@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"time"
 	"webCrawler3/config"
+	"webCrawler3/infra/mgr/front"
 	"webCrawler3/infra/mgr/handler"
 )
 
@@ -29,8 +30,11 @@ func InitRouters(ctx context.Context, conf *config.Config) {
 	mux.HandleFunc("/api/v1/manager", handler.HandlerMaganer)
 
 	// load static files
-	//fs := http.FileServer(http.Dir("./web"))
-	//mux.Handle("/", fs)
+	assets, _ := front.Assets()
+
+	// Use the file system to serve static files
+	fs := http.FileServer(http.FS(assets))
+	mux.Handle("/", http.StripPrefix("/", fs))
 
 	s := &http.Server{
 		Addr:           config.Conf.GetAddrManager(),

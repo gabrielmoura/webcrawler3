@@ -7,7 +7,9 @@ import (
 	"github.com/google/uuid"
 	"net/http"
 	"net/url"
+	"regexp"
 	"time"
+	"webCrawler3/infra/db"
 	"webCrawler3/infra/db/repoDb"
 )
 
@@ -20,10 +22,28 @@ func HandlerGraph(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// validateFilter Valida o filtro de domínio
+func validateFilter(filter string) bool {
+	return regexp.MustCompile(`^[a-zA-Z]{1}[a-zA-Z0-9]{2}\.[a-zA-Z]{2,3}$`).MatchString(filter)
+}
 func graphHandler(w http.ResponseWriter, r *http.Request) {
 	ctxTimeout, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
-	data, err := returnGraph(ctxTimeout)
+
+	filter := GetStrByQuery(r, "filter", "")
+
+	// valide filter, se for diferente de "", então usar regex para verificar se exister 3 caracteres antes do ponto, o primeiro caractere deve ser uma letra, e os outros dois podem ser letras ou números, depois do ponto deve ter 2 ou 3 caracteres, todos devem ser letras
+	if filter != "" {
+		if !validateFilter(filter) {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Invalid filter"))
+			return
+		}
+
+		// novo fluxo
+	}
+
+	data, err := returnGraph(ctxTimeout, filter)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte(err.Error()))
@@ -118,9 +138,15 @@ func returnGraphWithDirection(ctx context.Context) ([]byte, error) {
 
 	return result, nil // Retorna o gráfico serializado
 }
-func returnGraph(ctx context.Context) ([]byte, error) {
+func returnGraph(ctx context.Context, filter string) ([]byte, error) {
+	var pages []db.GetAllPagesForGraphRow
+	var err error
 	// Obtém as páginas do banco de dados para construir o gráfico
-	pages, err := repoDb.GetPagesForGraph(ctx)
+	if filter == "" {
+		pages, err = repoDb.GetPagesForGraph(ctx)
+	} else {
+		pages, err = repoDb.GetPagesForGraphWithFilter(ctx, filter)
+	}
 	if err != nil {
 		return nil, err // Retorna erro se não for possível obter as páginas
 	}

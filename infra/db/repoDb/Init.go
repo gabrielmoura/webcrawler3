@@ -460,6 +460,37 @@ func GetPagesForGraph(ctx context.Context) ([]db.GetAllPagesForGraphRow, error) 
 	return pages, nil
 }
 
+func GetPagesForGraphWithFilter(ctx context.Context, filter string) ([]db.GetAllPagesForGraphRow, error) {
+	const getAllPagesForGraphWithFilter = `-- name: GetAllPagesForGraphWithFilter :many
+SELECT ID, title, url, links
+FROM pages
+WHERE url ILIKE '%' || $1::text || '%'
+`
+	rows, err := Pool.Query(ctx, getAllPagesForGraphWithFilter, filter)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []db.GetAllPagesForGraphRow
+	for rows.Next() {
+		var i db.GetAllPagesForGraphRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.Url,
+			&i.Links,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+
+}
+
 func GetQueue(ctx context.Context, limit, offset int32, strStatus string) ([]db.Queue, error) {
 	status := db.Status(strStatus)
 	if !status.Valid() {
